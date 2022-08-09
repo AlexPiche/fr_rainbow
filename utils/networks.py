@@ -250,8 +250,43 @@ def rainbow_atari_network(
     assert q_logits.shape[1:] == (num_actions, num_atoms)
     q_dist = jax.nn.softmax(q_logits)
     q_values = jnp.sum(q_dist * support, axis=2)
-    q_values = jax.lax.stop_gradient(q_values)
     return C51NetworkOutputs(q_logits=q_logits, q_values=q_values)
+
+  return net_fn
+
+
+def rainbow_atari_network2(
+    num_actions: int,
+    support: jnp.ndarray,
+    noisy_weight_init: float,
+) -> NetworkFn:
+  """Rainbow network, expects `uint8` input."""
+
+  if support.ndim != 1:
+    raise ValueError('support should be 1D.')
+  num_atoms = len(support)
+  support = support[None, None, :]
+
+  def net_fn(inputs):
+    """Function representing Rainbow Q-network."""
+    inputs = dqn_torso()(inputs)
+
+    # Advantage head.
+    advantage = noisy_linear(512, noisy_weight_init, with_bias=True)(inputs)
+    advantage = jax.nn.relu(advantage)
+    advantage = noisy_linear(
+        num_actions, noisy_weight_init, with_bias=False)(
+            advantage)
+
+    # Value head.
+    value = noisy_linear(512, noisy_weight_init, with_bias=True)(inputs)
+    value = jax.nn.relu(value)
+    value = noisy_linear(1, noisy_weight_init, with_bias=False)(value)
+
+    # Q-distribution and values.
+    q_values = value + advantage - jnp.mean(advantage, axis=-1, keepdims=True)
+    #assert q_values.shape[1:] == num_actions
+    return C51NetworkOutputs(q_logits=q_values, q_values=q_values)
 
   return net_fn
 

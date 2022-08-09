@@ -92,16 +92,17 @@ class Rainbow(parts.Agent):
 
     def loss_fn(online_params, target_params, transitions, weights, rng_key):
       """Calculates loss given network parameters and transitions."""
+      grad_error_bound = 1. / 32
       _, *apply_keys = jax.random.split(rng_key, 5)
-      q_tm1 = network.apply(online_params, apply_keys[0],
-                                 transitions.s_tm1).q_values
-      prior_q_tm1 = network.apply(target_params, apply_keys[1],
+      prior_q_tm1 = network.apply(target_params, apply_keys[0],
                                   transitions.s_tm1).q_values
+      q_tm1 = network.apply(online_params, apply_keys[1],
+                                 transitions.s_tm1).q_values
       q_t0 = network.apply(online_params, apply_keys[2],
-                               transitions.s_t).q_values
+                           transitions.s_t).q_values
       q_t1 = network.apply(online_params, apply_keys[3],
-                               transitions.s_t).q_values
-      losses = _batch_double_q_learning(
+                           transitions.s_t).q_values
+      td_errors = _batch_double_q_learning(
           q_tm1,
           transitions.a_tm1,
           transitions.r_t,
@@ -109,6 +110,9 @@ class Rainbow(parts.Agent):
           q_t1,
           q_t0,
       )
+      td_errors = rlax.clip_gradient(td_errors, -grad_error_bound,
+                                     grad_error_bound)
+      losses = rlax.l2_loss(td_errors)
       prior_losses = 0.5 * self.reg_weight * (prior_q_tm1 - q_tm1)**2
       a_tm1 = jnp.reshape(transitions.a_tm1, (-1, 1))
       prior_losses = jnp.squeeze(jnp.take_along_axis(prior_losses, a_tm1, -1))

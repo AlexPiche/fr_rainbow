@@ -139,8 +139,8 @@ def main(argv):
   logging.info('Observation spec: %s', env.observation_spec())
   num_actions = env.action_spec().num_values
   support = jnp.linspace(-FLAGS.vmax, FLAGS.vmax, FLAGS.num_atoms)
-  network_fn = networks.rainbow_atari_network(num_actions, support,
-                                              FLAGS.noisy_weight_init)
+  network_fn = networks.rainbow_atari_network2(num_actions, support,
+                                               FLAGS.noisy_weight_init)
   network = hk.transform(network_fn)
 
   def preprocessor_builder():
